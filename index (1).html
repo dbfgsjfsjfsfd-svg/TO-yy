@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>To My Best Friend - Kongming Lanterns & Letter</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+            background-color: #0a0505; 
+            font-family: 'Helvetica Neue', Arial, sans-serif; user-select: none;
+        }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #input_video { position: absolute; top: 0; left: 0; width: 0; height: 0; opacity: 0; z-index: -1; }
+        
+        .ui-layer {
+            position: absolute; z-index: 10; pointer-events: none;
+            width: 100%; height: 100%;
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 0 15px rgba(255, 51, 102, 0.8);
+        }
+        .header {
+            position: absolute; top: 5%; width: 100%; text-align: center;
+            font-size: 2.5rem; font-weight: 300; letter-spacing: 8px; opacity: 0;
+            animation: fadeIn 3s ease-out forwards 1s;
+            background: linear-gradient(to right, #ff99aa, #ff3366);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .gesture-hint {
+            position: absolute; top: 30px; left: 30px; font-size: 0.9rem; line-height: 1.6;
+            background: rgba(20, 5, 10, 0.5); padding: 15px 20px;
+            border-radius: 12px; border: 1px solid rgba(255, 51, 102, 0.3);
+            backdrop-filter: blur(10px); opacity: 0.9;
+            box-shadow: 0 0 20px rgba(255, 51, 102, 0.2);
+        }
+        .gesture-hint span { color: #ff99aa; font-weight: bold; }
+        .music-control {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            padding: 12px 35px; border: 1px solid rgba(255, 51, 102, 0.5);
+            border-radius: 30px; font-size: 0.9rem; letter-spacing: 2px;
+            cursor: pointer; pointer-events: auto; background: rgba(0, 0, 0, 0.6);
+            transition: 0.3s; display: flex; align-items: center; gap: 10px;
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.3);
+        }
+        .music-control:hover { background: rgba(255, 51, 102, 0.2); border-color: #ff99aa; }
+        
+        .letter-btn {
+            position: absolute; bottom: 30px; left: 30px;
+            padding: 12px 25px; border: 1px solid rgba(255, 51, 102, 0.5);
+            border-radius: 30px; font-size: 0.9rem; letter-spacing: 1px;
+            cursor: pointer; pointer-events: auto; background: rgba(20, 5, 10, 0.6);
+            transition: 0.3s; display: flex; align-items: center; gap: 8px;
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.3);
+        }
+        .letter-btn:hover { background: rgba(255, 51, 102, 0.2); border-color: #ff99aa; }
+
+        .letter-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10, 2, 5, 0.6); backdrop-filter: blur(8px);
+            z-index: 50; display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.6s ease;
+        }
+        .letter-overlay.active {
+            opacity: 1; pointer-events: auto;
+        }
+        .letter-content {
+            background: rgba(20, 5, 10, 0.85);
+            border: 2px solid rgba(255, 51, 102, 0.6);
+            box-shadow: 0 0 40px rgba(255, 51, 102, 0.4), inset 0 0 20px rgba(255, 51, 102, 0.2);
+            border-radius: 20px; padding: 45px 50px; max-width: 85%; width: 550px;
+            color: #fff; line-height: 1.8; text-shadow: 0 0 8px rgba(255,51,102,0.4);
+            transform: translateY(30px) scale(0.95); transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+        }
+        .letter-overlay.active .letter-content { transform: translateY(0) scale(1); }
+        .letter-title { color: #ff3366; margin-top: 0; font-size: 1.8rem; letter-spacing: 2px; }
+        .letter-body { font-size: 1.1rem; letter-spacing: 1px; margin-bottom: 25px; }
+        .letter-small { 
+            font-size: 0.85rem; color: #ff99aa; line-height: 1.6; 
+            padding-top: 15px; border-top: 1px dashed rgba(255, 51, 102, 0.3);
+        }
+        .letter-from { text-align: right; margin-bottom: 0; color: #ff3366; font-weight: bold; font-size: 1.2rem; margin-top: 20px;}
+        .close-hint { position: absolute; top: 15px; right: 20px; font-size: 0.8rem; color: #ff99aa; opacity: 0.7; cursor: pointer; }
+
+        #debug-panel {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px;
+            color: #ff6b6b; z-index: 1000; display: none; text-align: left;
+            max-width: 80%; border: 1px solid #ff6b6b;
+        }
+        #debug-title { font-weight: bold; margin-bottom: 10px; color: #fff; font-size: 1.2rem;}
+
+        #loader {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0a0505;
+            z-index: 100; display: flex; justify-content: center; align-items: center;
+            flex-direction: column; color: white; transition: opacity 1s;
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 2px solid transparent; border-top: 2px solid #ff0033;
+            border-right: 2px solid #ff99aa; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <audio id="bgm" loop><source src="./Happy Birthday to You.mp3" type="audio/mpeg"></audio>
+    
+    <div id="loader">
+        <div class="spinner"></div>
+        <div id="loading-text">正在构筑绯红召唤阵...</div>
+    </div>
+
+    <div id="debug-panel"><div id="debug-title">⚠️ 魔力流失警告</div><div id="debug-content"></div></div>
+    
+    <video id="input_video" playsinline></video>
+    
+    <div class="letter-overlay" id="letter-overlay">
+        <div class="letter-content">
+            <div class="close-hint" id="close-letter-btn">✕ 关闭</div>
+            <h2 class="letter-title">亲爱的yy：</h2>
+            <div class="letter-body">
+                啊哈哈，21岁生日快乐！没想到这一天来的这么快！<br>
+                我已挟持你的老公们为你送上生日祝福（咪咪微笑脸）<br><br>
+                我总希望我们的友谊能够永痕，那今年就用赛博蛋糕代替我的祝福，毕竟赛博蛋糕能够永恒（？）吧！<br>
+                期待我们见面！想你想你想你想你
+            </div>
+            <div class="letter-small">
+                今年真的是记错时间了！但还是罪过orz 嘿嘿错啦错啦（摇你手撒娇）明年一定给你大操大办！（操操操？）嘿嘿爱你！
+            </div>
+            <div class="letter-from">from：蔚蔚~</div>
+        </div>
+    </div>
+
+    <div class="ui-layer">
+        <div class="gesture-hint" id="hint-text">
+            术式状态: <span id="status-display">等待魔力注入</span><br>
+            <hr style="border:0; border-top:1px solid rgba(255,51,102,0.3); margin:8px 0;">
+            <div style="font-size: 0.85rem; color: #ddd;">
+                <div>🖐 <b>五指张开</b>: 触发召唤阵</div>
+                <div>↔️ <b>左右挥手</b>: 翻阅羁绊卡牌</div>
+                <div>✌️ <b>比个“耶”</b>: 展开专属信件</div>
+                <div>✊ <b>握紧拳头</b>: 封印/重置</div>
+            </div>
+        </div>
+        <div class="header">HAPPY BIRTHDAY</div>
+        <div class="letter-btn" id="manual-letter-btn"><span>📩</span> <span>查收信件</span></div>
+        <div class="music-control" id="music-btn"><span>🎵</span> <span id="music-text">启动共鸣音轨</span></div>
+    </div>
+    
+    <div id="canvas-container"></div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import * as TWEEN from 'three/addons/libs/tween.module.js';
+
+        const CONFIG = {
+            // 🌟 扩充到7张照片
+            photos: [
+                './1.JPG', 
+                './2.JPG',
+                './3.JPG', 
+                './4.JPG',
+                './5.JPG',
+                './6.JPG',
+                './7.JPG'
+            ],
+            colors: {
+                bg: 0x0a0505, cakeBody: 0xffffff, 
+                decoration: 0xffb6c1, flame: 0xff4500, 
+                magicGlow: 0xff3366, starfield: 0xffffff
+            }
+        };
+
+        let scene, camera, renderer, controls;
+        let cakeGroup, photoGroup, magicCircleGroup, starfieldGroup, sparksGroup;
+        let flameMesh, ribbonMesh, particleMesh, lanternGroup; 
+        let photoMeshes = [];
+        let trailParticles = []; 
+        
+        const STATE = { IDLE: 'idle', GALLERY: 'gallery', RESETTING: 'resetting' };
+        let currentState = STATE.IDLE;
+
+        // 🌟 调整初始中心点为第4张卡牌 (index 3)
+        let galleryIndex = 0; let targetIndex = 3; 
+        let lastHandX = 0.5, lastHandY = 0.5;
+        let isHandVisible = false;
+        
+        let isLetterOpen = false;
+        let lastGestureTime = 0;
+        
+        const musicBtn = document.getElementById('music-btn');
+        const manualLetterBtn = document.getElementById('manual-letter-btn');
+        const closeLetterBtn = document.getElementById('close-letter-btn');
+        const letterOverlay = document.getElementById('letter-overlay');
+        const bgm = document.getElementById('bgm');
+        let mPlay = false;
+
+        function reportError(msg) {
+            const panel = document.getElementById('debug-panel');
+            const content = document.getElementById('debug-content');
+            panel.style.display = 'block';
+            content.innerHTML += `⚠️ ${msg}<br>`;
+            document.getElementById('loader').style.display = 'none';
+        }
+
+        function init() {
+            try {
+                const container = document.getElementById('canvas-container');
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(CONFIG.colors.bg);
+                scene.fog = new THREE.FogExp2(CONFIG.colors.bg, 0.02); 
+
+                camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.set(0, 4, 15);
+                camera.lookAt(0, 1, 0);
+
+                renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                renderer.toneMappingExposure = 1.2;
+                container.appendChild(renderer.domElement);
+
+                const ambientLight = new THREE.AmbientLight(0x381b22, 1.5);
+                scene.add(ambientLight);
+                
+                const centerLight = new THREE.PointLight(CONFIG.colors.flame, 2.5, 20);
+                centerLight.position.set(0, 4.5, 0);
+                scene.add(centerLight);
+                
+                const magicLight = new THREE.PointLight(CONFIG.colors.magicGlow, 3.0, 30); 
+                magicLight.position.set(0, -2, 0);
+                scene.add(magicLight);
+
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true; controls.enableZoom = false;
+                controls.maxPolarAngle = Math.PI / 2 + 0.1; 
+
+                createMagicCircle();
+                createDoubleLayerCake();
+                createStarfield();
+                createRedSparks(); 
+                createKongmingLanterns(); 
+                createHolographicGallery(); 
+
+                window.addEventListener('resize', onWindowResize);
+                window.addEventListener('click', handleMouseClick);
+                animate();
+            } catch (e) { 
+                reportError("术式解析失败: " + e.message);
+            }
+        }
+
+        function createKongmingLanterns() {
+            lanternGroup = new THREE.Group();
+            const lanternTexts = [
+                "yy/\\/\\/",
+                "生日快乐/\\/\\/",
+                "永远操到老公(老婆)",
+                "有钱",
+                "一切顺利"
+            ];
+            
+            const lanternColors = [
+                ['#ff1a40', '#ff8099'], 
+                ['#e62e00', '#ff6633'], 
+                ['#ff3366', '#ffb3c6'], 
+                ['#cc0033', '#ff4d79'], 
+                ['#ff0055', '#ff99aa']
+            ];
+
+            lanternTexts.forEach((text, i) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 400; canvas.height = 750; 
+                const ctx = canvas.getContext('2d');
+
+                const c1 = lanternColors[i % lanternColors.length][0];
+                const c2 = lanternColors[i % lanternColors.length][1];
+
+                ctx.shadowColor = c1;
+                ctx.shadowBlur = 40;
+                const grad = ctx.createLinearGradient(0, 0, 0, 750);
+                grad.addColorStop(0, c2); 
+                grad.addColorStop(0.7, c1); 
+                grad.addColorStop(1, '#ffaa00'); 
+                ctx.fillStyle = grad;
+
+                ctx.beginPath();
+                ctx.moveTo(120, 50);
+                ctx.quadraticCurveTo(200, 10, 280, 50); 
+                ctx.quadraticCurveTo(360, 350, 290, 650); 
+                ctx.lineTo(110, 650); 
+                ctx.quadraticCurveTo(40, 350, 120, 50); 
+                ctx.fill();
+
+                ctx.shadowBlur = 60;
+                ctx.shadowColor = '#ffff00';
+                ctx.fillStyle = '#ffcc00';
+                ctx.beginPath();
+                ctx.ellipse(200, 650, 90, 20, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.shadowBlur = 20;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.ellipse(200, 650, 50, 10, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = 'rgba(10, 0, 5, 0.8)'; 
+                ctx.fillStyle = '#ffffff'; 
+
+                const chars = text.split('');
+                const fontSize = Math.min(65, 550 / chars.length); 
+                ctx.font = `bold ${fontSize}px "Helvetica Neue", Arial, sans-serif`;
+                ctx.textAlign = 'center'; 
+                ctx.textBaseline = 'middle';
+                
+                const totalTextHeight = chars.length * fontSize;
+                const startY = 320 - (totalTextHeight / 2) + (fontSize / 2);
+
+                chars.forEach((char, idx) => {
+                    ctx.fillText(char, 200, startY + idx * fontSize);
+                });
+
+                const tex = new THREE.CanvasTexture(canvas);
+                const mat = new THREE.SpriteMaterial({
+                    map: tex, transparent: true, opacity: 0, 
+                    blending: THREE.AdditiveBlending, depthWrite: false
+                });
+                
+                const sprite = new THREE.Sprite(mat);
+                
+                const baseXs = [-24, -11, 0, 11, 24]; 
+                const baseZs = [-28, -21, -16, -21, -28]; 
+                const x = baseXs[i] + (Math.random() - 0.5) * 2; 
+                const y = -25 - Math.random() * 15;
+                const z = baseZs[i] - Math.random() * 5; 
+                
+                sprite.position.set(x, y, z);
+                sprite.scale.set(7, 13.125, 1); 
+                
+                sprite.userData = {
+                    speed: 0.015 + Math.random() * 0.01, 
+                    sway: 0.005 + Math.random() * 0.008, 
+                    offset: Math.random() * Math.PI * 2,
+                    baseX: x
+                };
+
+                lanternGroup.add(sprite);
+            });
+            scene.add(lanternGroup);
+        }
+
+        function createRedSparks() {
+            sparksGroup = new THREE.Group();
+            const geo = new THREE.BufferGeometry();
+            const pos = [], col = [];
+            const colorObj = new THREE.Color();
+            
+            for(let i=0; i<800; i++) {
+                pos.push((Math.random()-0.5)*40, (Math.random()-0.5)*30 - 5, (Math.random()-0.5)*40);
+                const mix = Math.random();
+                if(mix > 0.6) colorObj.setHex(0xff3366);      
+                else if(mix > 0.3) colorObj.setHex(0xff0033); 
+                else colorObj.setHex(0xff99aa);               
+                col.push(colorObj.r, colorObj.g, colorObj.b);
+            }
+            
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+            
+            const mat = new THREE.PointsMaterial({
+                size: 0.25, vertexColors: true, transparent: true, opacity: 0.8,
+                map: createParticleTexture(), blending: THREE.AdditiveBlending, depthWrite: false
+            });
+            sparksGroup.add(new THREE.Points(geo, mat));
+            scene.add(sparksGroup);
+        }
+
+        function createMagicCircle() {
+            magicCircleGroup = new THREE.Group();
+            magicCircleGroup.position.y = -2.2;
+            
+            const ringGeo = new THREE.RingGeometry(4.5, 4.6, 64);
+            const ringMat = new THREE.MeshBasicMaterial({ color: CONFIG.colors.magicGlow, transparent: true, opacity: 0.8, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+            const outerRing = new THREE.Mesh(ringGeo, ringMat); outerRing.rotation.x = Math.PI / 2;
+            magicCircleGroup.add(outerRing);
+
+            const innerRingGeo = new THREE.RingGeometry(3.8, 3.85, 64);
+            const innerRingMat = new THREE.MeshBasicMaterial({ color: 0xff99aa, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+            const innerRing = new THREE.Mesh(innerRingGeo, innerRingMat); innerRing.rotation.x = Math.PI / 2;
+            magicCircleGroup.add(innerRing);
+
+            const hexGeo = new THREE.CylinderGeometry(4.0, 4.0, 0.05, 6);
+            const edges = new THREE.EdgesGeometry(hexGeo);
+            const lineMat = new THREE.LineBasicMaterial({ color: CONFIG.colors.magicGlow, transparent: true, opacity: 0.6 });
+            const hexagram = new THREE.LineSegments(edges, lineMat);
+            magicCircleGroup.add(hexagram);
+            
+            const hexagram2 = new THREE.LineSegments(edges, lineMat); hexagram2.rotation.y = Math.PI / 6;
+            magicCircleGroup.add(hexagram2);
+            scene.add(magicCircleGroup);
+        }
+
+        function createStarfield() {
+            starfieldGroup = new THREE.Group();
+            const starGeo = new THREE.BufferGeometry();
+            const starPos = [], starColors = [];
+            const colorObj = new THREE.Color();
+
+            for(let i=0; i<3000; i++) {
+                const r = 40 + Math.random() * 40;
+                const theta = 2 * Math.PI * Math.random();
+                const phi = Math.acos(2 * Math.random() - 1);
+                starPos.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+                
+                const mix = Math.random();
+                if(mix > 0.8) colorObj.setHex(0xff99aa);
+                else if(mix > 0.6) colorObj.setHex(0xffeebb);
+                else colorObj.setHex(0xffffff);
+                starColors.push(colorObj.r, colorObj.g, colorObj.b);
+            }
+            
+            starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+            starGeo.setAttribute('color', new THREE.Float32BufferAttribute(starColors, 3));
+            
+            const starMat = new THREE.PointsMaterial({
+                size: 0.15, vertexColors: true, transparent: true, opacity: 0, 
+                map: createParticleTexture(), blending: THREE.AdditiveBlending, depthWrite: false
+            });
+            starfieldGroup.add(new THREE.Points(starGeo, starMat));
+            scene.add(starfieldGroup);
+        }
+
+        function createDoubleLayerCake() {
+            cakeGroup = new THREE.Group();
+            const geo = new THREE.BufferGeometry();
+            const pos=[], col=[], orig=[], vel=[];
+
+            createCylinderParticles(pos, col, orig, vel, 3.5, 1.8, -2.0, 4000, 0xfce4ec); 
+            createCylinderParticles(pos, col, orig, vel, 2.0, 1.4, -0.2, 2500, 0xfff0f5);
+            createSolidRibbon();
+            createCylinderParticles(pos, col, orig, vel, 0.2, 1.0, 1.2, 400, 0xff99aa);
+
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+            geo.userData = { originalPositions: orig, velocities: vel };
+
+            const mat = new THREE.PointsMaterial({
+                size: 0.15, vertexColors: true, transparent: true, opacity: 0.95,
+                blending: THREE.AdditiveBlending, depthWrite: false, map: createParticleTexture()
+            });
+
+            particleMesh = new THREE.Points(geo, mat);
+            cakeGroup.add(particleMesh);
+            createStableFlame();
+            scene.add(cakeGroup);
+        }
+
+        function createSolidRibbon() {
+            const points = [];
+            const turns = 1.5; 
+            for (let i = 0; i <= 100; i++) {
+                const t = i / 100;
+                const angle = t * Math.PI * 2 * turns;
+                const y = -2.0 + t * 3.5; 
+                let r = 3.6;
+                if (y > -0.2) r = (y > 0.3) ? 2.1 : 3.6 - (3.6 - 2.1) * ((y + 0.2) / 0.5);
+                points.push(new THREE.Vector3(Math.cos(angle)*r, y, Math.sin(angle)*r));
+            }
+            const curve = new THREE.CatmullRomCurve3(points);
+            const tubeMat = new THREE.MeshStandardMaterial({
+                color: CONFIG.colors.decoration, emissive: CONFIG.colors.magicGlow, emissiveIntensity: 0.8, transparent: true, opacity: 0.9
+            });
+            ribbonMesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, 0.03, 8, false), tubeMat);
+            cakeGroup.add(ribbonMesh);
+        }
+
+        function createCylinderParticles(pos, col, orig, vel, r, h, bottomY, count, hexColor) {
+            const c = new THREE.Color(hexColor);
+            for(let i=0; i<count; i++) {
+                const ang = Math.random() * Math.PI * 2;
+                const finalR = (Math.random()>0.3) ? r*(0.9+Math.random()*0.1) : r * Math.sqrt(Math.random());
+                const x = Math.cos(ang) * finalR, z = Math.sin(ang) * finalR, y = bottomY + Math.random() * h;
+                pos.push(x, y, z); orig.push(x, y, z);
+                const v = new THREE.Vector3(x, y*0.5, z).normalize().multiplyScalar(4 + Math.random()*5);
+                vel.push(v.x, v.y, v.z); col.push(c.r, c.g, c.b);
+            }
+        }
+
+        function createStableFlame() {
+            const geo = new THREE.ConeGeometry(0.15, 0.6, 16); geo.translate(0, 0.3, 0);
+            const mat = new THREE.MeshBasicMaterial({ color: CONFIG.colors.flame, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
+            flameMesh = new THREE.Mesh(geo, mat); flameMesh.position.set(0, 2.2, 0); 
+            cakeGroup.add(flameMesh);
+            
+            const sMat = new THREE.SpriteMaterial({ map: createParticleTexture(), color: 0xffeebb, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
+            const sprite = new THREE.Sprite(sMat); sprite.scale.set(2.0, 2.0, 2.0); sprite.position.set(0, 0.3, 0); 
+            flameMesh.add(sprite); flameMesh.userData.glow = sprite;
+        }
+
+        function processImageToSquareTexture(image) {
+            const size = 512; 
+            const canvas = document.createElement('canvas');
+            canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#0a0505'; ctx.fillRect(0, 0, size, size);
+
+            const aspect = image.width / image.height;
+            let drawW = size, drawH = size, drawX = 0, drawY = 0;
+            if (aspect > 1) { drawW = size * aspect; drawX = (size - drawW) / 2; } 
+            else { drawH = size / aspect; drawY = (size - drawH) / 2; }
+            
+            ctx.drawImage(image, drawX, drawY, drawW, drawH);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter;
+            return tex;
+        }
+
+        function createHolographicGallery() {
+            photoGroup = new THREE.Group(); photoGroup.visible = false;
+            const cardWidth = 4.2; const cardHeight = 5.2; const photoSize = 3.9; 
+            
+            CONFIG.photos.forEach((url, index) => {
+                const group = new THREE.Group();
+                const frameGeo = new THREE.PlaneGeometry(cardWidth, cardHeight);
+                const frameMat = new THREE.MeshStandardMaterial({ color: 0x111, roughness: 0.1, metalness: 0.8, transparent: true, opacity: 0.8 });
+                group.add(new THREE.Mesh(frameGeo, frameMat));
+
+                const borderMat = new THREE.LineBasicMaterial({ color: 0xff3366, transparent: true, opacity: 0.8 });
+                const border = new THREE.LineSegments(new THREE.EdgesGeometry(frameGeo), borderMat);
+                border.position.z = 0.02; group.add(border);
+
+                const loader = new THREE.ImageLoader(); loader.setCrossOrigin('anonymous'); 
+                loader.load(url, (image) => {
+                    const photo = new THREE.Mesh(new THREE.PlaneGeometry(photoSize, photoSize), new THREE.MeshBasicMaterial({ map: processImageToSquareTexture(image), toneMapped: false }));
+                    photo.position.set(0, 0.35, 0.05); group.add(photo);
+                }, undefined, () => {
+                    const photo = new THREE.Mesh(new THREE.PlaneGeometry(photoSize, photoSize), new THREE.MeshBasicMaterial({ map: createFallbackTexture(index), toneMapped: false }));
+                    photo.position.set(0, 0.35, 0.05); group.add(photo);
+                });
+
+                group.userData = { index: index, baseRotY: 0 };
+                photoMeshes.push(group); photoGroup.add(group);
+            });
+            scene.add(photoGroup);
+        }
+
+        function createFallbackTexture(index) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createLinearGradient(0, 0, 512, 512);
+            grad.addColorStop(0, '#381b22'); grad.addColorStop(1, '#0a0505');
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, 512, 512);
+            ctx.fillStyle = '#ff99aa'; ctx.font = 'bold 60px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('SSR CARD', 256, 200); ctx.font = '40px Arial'; ctx.fillText(`#${index + 1}`, 256, 300);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function updateStatusText(text) {
+            const el = document.getElementById('status-display');
+            if(el) el.innerText = text;
+        }
+
+        function playMusic() {
+            if(!mPlay && bgm) {
+                bgm.play().then(() => {
+                    mPlay = true;
+                    musicBtn.style.borderColor="#ff3366"; 
+                    document.getElementById('music-text').innerText="暂停共鸣";
+                }).catch(e => console.log("Music autoplay blocked"));
+            }
+        }
+
+        function toggleLetter() {
+            isLetterOpen = !isLetterOpen;
+            if (isLetterOpen) {
+                letterOverlay.classList.add('active');
+                updateStatusText("正在阅读信件...");
+            } else {
+                letterOverlay.classList.remove('active');
+                updateStatusText(currentState === STATE.IDLE ? "等待魔力注入" : "左右挥手翻看卡牌");
+            }
+        }
+
+        manualLetterBtn.addEventListener('click', () => toggleLetter());
+        closeLetterBtn.addEventListener('click', () => toggleLetter());
+
+        function explodeCake() {
+            if (currentState !== STATE.IDLE) return;
+            if (!particleMesh.geometry.userData.originalPositions) return;
+
+            TWEEN.removeAll(); playMusic(); currentState = STATE.GALLERY;
+            updateStatusText("左右挥手翻看卡牌");
+
+            const pos = particleMesh.geometry.attributes.position.array;
+            const orig = particleMesh.geometry.userData.originalPositions;
+            const vel = particleMesh.geometry.userData.velocities;
+
+            new TWEEN.Tween({ t: 0 }).to({ t: 1 }, 2000).easing(TWEEN.Easing.Cubic.Out)
+                .onUpdate(o => {
+                    for(let i=0; i<pos.length/3; i++) {
+                        if(orig[i*3]!==undefined) {
+                            pos[i*3] = orig[i*3] + vel[i*3] * o.t * (1 + o.t);
+                            pos[i*3+1] = orig[i*3+1] + vel[i*3+1] * o.t * (1 + o.t);
+                            pos[i*3+2] = orig[i*3+2] + vel[i*3+2] * o.t * (1 + o.t);
+                        }
+                    }
+                    particleMesh.geometry.attributes.position.needsUpdate = true;
+                    particleMesh.material.opacity = (1 - o.t);
+                    if(flameMesh) flameMesh.visible = false;
+                    if(ribbonMesh) ribbonMesh.material.opacity = (1 - o.t) * 0.9;
+                }).start();
+
+            magicCircleGroup.children.forEach(child => new TWEEN.Tween(child.material).to({ opacity: 0 }, 1000).start());
+            if (sparksGroup) new TWEEN.Tween(sparksGroup.children[0].material).to({ opacity: 0 }, 1500).start();
+            new TWEEN.Tween(starfieldGroup.children[0].material).to({ opacity: 0.8 }, 2000).delay(500).start();
+            
+            if (lanternGroup) {
+                lanternGroup.children.forEach((child, i) => {
+                    child.position.y = -25 - Math.random() * 10;
+                    new TWEEN.Tween(child.material).to({ opacity: 0.95 }, 2500).delay(800 + i * 300).start();
+                });
+            }
+
+            photoGroup.visible = true; 
+            // 🌟 重新设定展开后的默认居中位置为 index 3 (第四张照片)
+            targetIndex = 3; galleryIndex = 3; 
+            photoMeshes.forEach((g, i) => {
+                g.scale.set(0,0,0);
+                // 🌟 动画发散中心也改为根据与 index 3 的距离计算延迟
+                new TWEEN.Tween(g.scale).to({x:1, y:1, z:1}, 1200).delay(800 + Math.abs(3-i)*100).easing(TWEEN.Easing.Elastic.Out).start();
+            });
+        }
+
+        function implodeCake() {
+            if (currentState !== STATE.GALLERY) return;
+            
+            if (isLetterOpen) toggleLetter();
+
+            TWEEN.removeAll(); currentState = STATE.RESETTING;
+            updateStatusText("等待魔力注入...");
+
+            const pos = particleMesh.geometry.attributes.position.array;
+            const orig = particleMesh.geometry.userData.originalPositions;
+
+            if(flameMesh) { flameMesh.visible = true; flameMesh.scale.set(0,0,0); }
+            new TWEEN.Tween(starfieldGroup.children[0].material).to({ opacity: 0 }, 1000).start();
+
+            magicCircleGroup.children.forEach((child, idx) => {
+                new TWEEN.Tween(child.material).to({ opacity: idx === 0 ? 0.8 : (idx === 1 ? 0.5 : 0.6) }, 1500).delay(500).start();
+            });
+
+            if (sparksGroup) new TWEEN.Tween(sparksGroup.children[0].material).to({ opacity: 0.8 }, 2000).delay(800).start();
+            
+            if (lanternGroup) {
+                lanternGroup.children.forEach((child) => {
+                    new TWEEN.Tween(child.material).to({ opacity: 0 }, 1000).start();
+                });
+            }
+
+            new TWEEN.Tween({ t: 0 }).to({ t: 1 }, 1500).easing(TWEEN.Easing.Cubic.InOut)
+                .onUpdate(o => {
+                    for(let i=0; i<pos.length/3; i++) {
+                        if(orig[i*3]!==undefined) {
+                            const cx=pos[i*3], cy=pos[i*3+1], cz=pos[i*3+2];
+                            const tx=orig[i*3], ty=orig[i*3+1], tz=orig[i*3+2];
+                            pos[i*3] = cx + (tx-cx)*o.t; pos[i*3+1] = cy + (ty-cy)*o.t; pos[i*3+2] = cz + (tz-cz)*o.t;
+                        }
+                    }
+                    particleMesh.geometry.attributes.position.needsUpdate = true;
+                    particleMesh.material.opacity = o.t * 0.95;
+                    if(ribbonMesh) ribbonMesh.material.opacity = o.t * 0.9;
+                    if(flameMesh) flameMesh.scale.set(1, Math.max(0, (o.t - 0.5) * 2), 1);
+                }).onComplete(() => { currentState = STATE.IDLE; }).start();
+
+            photoMeshes.forEach(g => new TWEEN.Tween(g.scale).to({x:0, y:0, z:0}, 600).easing(TWEEN.Easing.Back.In).start());
+            setTimeout(() => { photoGroup.visible = false; }, 600);
+        }
+
+        function updateGalleryLayout() {
+            if (currentState !== STATE.GALLERY) return;
+            galleryIndex += (targetIndex - galleryIndex) * 0.08; 
+            const spacing = 2.8; 
+            
+            photoMeshes.forEach((mesh, i) => {
+                const offset = i - galleryIndex, absOffset = Math.abs(offset);
+                mesh.position.set(offset * spacing, absOffset < 0.1 ? Math.sin(Date.now() * 0.002) * 0.1 : 0, -absOffset * 1.8 + Math.cos(offset) * 0.5);
+                
+                let rotY = Math.max(-0.8, Math.min(0.8, -offset * 0.35)); 
+                mesh.rotation.y = rotY; mesh.userData.baseRotY = rotY;
+                mesh.scale.setScalar(Math.max(0.5, 1 - (absOffset * 0.15)));
+                
+                const border = mesh.children.find(c => c.isLineSegments);
+                if(border) border.material.opacity = 1 - (absOffset * 0.3);
+            });
+        }
+
+        function spawnHandTrail(x, y) {
+            const vec = new THREE.Vector3((x - 0.5) * 2, -(y - 0.5) * 2, 0.5);
+            vec.unproject(camera); vec.sub(camera.position).normalize();
+            const pos = camera.position.clone().add(vec.multiplyScalar(-camera.position.z / vec.z));
+
+            const mat = new THREE.SpriteMaterial({ 
+                map: createParticleTexture(), color: Math.random() > 0.5 ? 0xff3366 : 0xff99aa, 
+                transparent: true, opacity: 1, blending: THREE.AdditiveBlending 
+            });
+            const sprite = new THREE.Sprite(mat); sprite.position.copy(pos);
+            sprite.scale.setScalar(0.2 + Math.random() * 0.4);
+            sprite.position.x += (Math.random() - 0.5) * 0.5; sprite.position.y += (Math.random() - 0.5) * 0.5;
+            
+            scene.add(sprite); trailParticles.push({ mesh: sprite, life: 1.0 });
+        }
+
+        function updateHandTrail() {
+            for (let i = trailParticles.length - 1; i >= 0; i--) {
+                const p = trailParticles[i]; p.life -= 0.03; p.mesh.position.y += 0.02; 
+                p.mesh.material.opacity = p.life; p.mesh.scale.setScalar(p.life * 0.6); 
+                if (p.life <= 0) { scene.remove(p.mesh); trailParticles.splice(i, 1); }
+            }
+        }
+
+        function onResults(results) {
+            document.getElementById('loader').style.display = 'none';
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                isHandVisible = true;
+                const lm = results.multiHandLandmarks[0];
+                const isOpen = detectOpenHand(lm);
+                const isFist = detectFist(lm);
+                const isPeace = detectPeace(lm); 
+                
+                const handX = 1 - ((lm[5].x + lm[17].x) / 2); 
+                const handY = (lm[5].y + lm[17].y) / 2;
+                spawnHandTrail(1 - lm[8].x, lm[8].y);
+
+                const now = Date.now();
+                if (now - lastGestureTime > 1500) {
+                    if (isPeace) {
+                        toggleLetter();
+                        lastGestureTime = now;
+                    } else if (isFist && isLetterOpen) {
+                        toggleLetter(); 
+                        lastGestureTime = now;
+                    }
+                }
+
+                if (!isLetterOpen) {
+                    if (currentState === STATE.IDLE && isOpen) explodeCake();
+                    else if (currentState === STATE.GALLERY) {
+                        if (isFist && now - lastGestureTime > 1500) {
+                            implodeCake();
+                            lastGestureTime = now;
+                        }
+                        else if (isOpen) {
+                            const delta = (handX - lastHandX) * 6; 
+                            if (Math.abs(delta) > 0.015) {
+                                targetIndex -= delta; 
+                                targetIndex = Math.max(0, Math.min(targetIndex, CONFIG.photos.length - 1));
+                            }
+                        }
+                    }
+                }
+                lastHandX = handX; lastHandY = handY;
+            } else isHandVisible = false;
+        }
+
+        function dist(p1, p2) { return Math.sqrt(Math.pow(p1.x-p2.x,2) + Math.pow(p1.y-p2.y,2)); }
+        function detectOpenHand(lm) { return dist(lm[8], lm[0])>0.3 && dist(lm[12], lm[0])>0.3 && dist(lm[16], lm[0])>0.3; }
+        function detectFist(lm) { return dist(lm[8], lm[0])<0.2 && dist(lm[12], lm[0])<0.2; }
+        function detectPeace(lm) { return dist(lm[8], lm[0]) > 0.3 && dist(lm[12], lm[0]) > 0.3 && dist(lm[16], lm[0]) < 0.2 && dist(lm[20], lm[0]) < 0.2; }
+
+        const videoElement = document.getElementById('input_video');
+        let hands;
+        try {
+             hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+             hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5});
+             hands.onResults(onResults);
+        } catch(e) { reportError("召唤魔力中断: " + e.message); }
+        
+        const cameraObj = new Camera(videoElement, {
+            onFrame: async () => { if(hands) await hands.send({image: videoElement}); }, width: 640, height: 480
+        });
+        
+        cameraObj.start().catch(e => {
+            document.getElementById('loading-text').style.display = 'none';
+            reportError("无法获取视觉流，请允许摄像头权限或改用鼠标点击操作。");
+        });
+
+        function createParticleTexture() {
+            const c = document.createElement('canvas'); c.width=32; c.height=32;
+            const ctx = c.getContext('2d');
+            const g = ctx.createRadialGradient(16,16,0,16,16,16);
+            g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(0.3,'rgba(255,255,255,0.6)'); g.addColorStop(1,'rgba(0,0,0,0)');
+            ctx.fillStyle=g; ctx.fillRect(0,0,32,32);
+            const t = new THREE.Texture(c); t.needsUpdate=true; return t;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            TWEEN.update(); controls.update();
+            updateHandTrail();
+
+            if (currentState === STATE.IDLE) {
+                cakeGroup.rotation.y += 0.005;
+                if(magicCircleGroup) {
+                    magicCircleGroup.children[0].rotation.z += 0.002; magicCircleGroup.children[1].rotation.z -= 0.003; 
+                    magicCircleGroup.children[2].rotation.y += 0.005; magicCircleGroup.children[3].rotation.y -= 0.005; 
+                }
+                if(flameMesh) {
+                    const t = Date.now() * 0.004; const flicker = Math.sin(t) * 0.1 + Math.sin(t * 1.7) * 0.05; 
+                    flameMesh.scale.y = 1 + flicker; flameMesh.userData.glow.opacity = 0.7 + flicker;
+                }
+            } else if (currentState === STATE.GALLERY && !isLetterOpen) {
+                updateGalleryLayout();
+                if(starfieldGroup) { starfieldGroup.rotation.y += 0.0005; starfieldGroup.rotation.x += 0.0002; }
+                
+                if (lanternGroup) {
+                    lanternGroup.children.forEach(b => {
+                        if (b.material.opacity > 0) {
+                            b.position.y += b.userData.speed;
+                            b.position.x = b.userData.baseX + Math.sin(Date.now() * 0.001 * b.userData.sway + b.userData.offset) * 1.2;
+                            if (b.position.y > 5) { 
+                                b.position.y = -25; 
+                            }
+                        }
+                    });
+                }
+            }
+
+            if (sparksGroup && sparksGroup.children[0].material.opacity > 0) {
+                const sPos = sparksGroup.children[0].geometry.attributes.position.array;
+                for(let i=1; i<sPos.length; i+=3) {
+                    sPos[i] += 0.015; sPos[i-1] += Math.sin(Date.now() * 0.001 + i) * 0.01; 
+                    if(sPos[i] > 15) sPos[i] = -10; 
+                }
+                sparksGroup.children[0].geometry.attributes.position.needsUpdate = true;
+                sparksGroup.rotation.y += 0.001; 
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function handleMouseClick(e) {
+            if (e.target.closest('#manual-letter-btn') || e.target.closest('#close-letter-btn') || e.target.closest('#music-btn')) return;
+            if (isLetterOpen) return; 
+
+            const x = (e.clientX/window.innerWidth)*2-1;
+            for(let i=0; i<5; i++) spawnHandTrail(e.clientX/window.innerWidth, e.clientY/window.innerHeight);
+
+            if (currentState === STATE.IDLE) explodeCake();
+            else {
+                if(x > 0.2) targetIndex += 1;
+                else if(x < -0.2) targetIndex -= 1;
+                else implodeCake();
+                targetIndex = Math.max(0, Math.min(targetIndex, CONFIG.photos.length - 1));
+            }
+        }
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        init();
+        musicBtn.addEventListener('click', () => {
+            if(!mPlay) playMusic(); 
+            else { bgm.pause(); mPlay=false; musicBtn.style.borderColor="rgba(255,51,102,0.5)"; document.getElementById('music-text').innerText="启动共鸣音轨"; }
+        });
+    </script>
+</body>
+</html>
